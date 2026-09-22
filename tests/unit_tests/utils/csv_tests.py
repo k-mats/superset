@@ -278,6 +278,91 @@ def test_df_to_escaped_csv_non_default_index():
     assert rows[2] == ["girl Mary", "safe"]
 
 
+@pytest.mark.parametrize(
+    "customers, expected_customers",
+    [
+        (["Alice", "Bob"], ["Alice", "Bob"]),
+        (["=SUM(1+1)", "safe"], ["'=SUM(1+1)", "safe"]),
+    ],
+)
+def test_df_to_escaped_csv_duplicate_row_labels(
+    customers: list[str], expected_customers: list[str]
+):
+    """
+    Every cell keeps its own value when several rows share the same index
+    label; a label-based write would otherwise copy one row's value into all
+    rows carrying that label.
+    """
+    df = pd.DataFrame(
+        {"customer": customers, "amount": pd.array([10, None], dtype="Int64")},
+        index=["same", "same"],
+    )
+    original = df.copy(deep=True)
+
+    escaped_csv_str = df_to_escaped_csv(df, encoding="utf8", index=False)
+
+    rows = [row.split(",") for row in escaped_csv_str.strip().split("\n")]
+    assert rows == [
+        ["customer", "amount"],
+        [expected_customers[0], "10"],
+        [expected_customers[1], ""],
+    ]
+    pd.testing.assert_frame_equal(df, original)
+
+    with_index = df_to_escaped_csv(df, encoding="utf8", index=True)
+    rows = [row.split(",") for row in with_index.strip().split("\n")]
+    assert rows == [
+        ["", "customer", "amount"],
+        ["same", expected_customers[0], "10"],
+        ["same", expected_customers[1], ""],
+    ]
+    pd.testing.assert_frame_equal(df, original)
+
+
+@pytest.mark.parametrize(
+    "values, expected_values",
+    [
+        (["Alice", "Bob"], ["Alice", "Bob"]),
+        (["=SUM(1+1)", "safe"], ["'=SUM(1+1)", "safe"]),
+        (["safe", "=SUM(1+1)"], ["safe", "'=SUM(1+1)"]),
+    ],
+)
+def test_df_to_escaped_csv_duplicate_column_labels(
+    values: list[str], expected_values: list[str]
+):
+    """
+    Every cell keeps its own value when several columns share the same header,
+    as happens when a ``verbose_map`` gives distinct source columns the same
+    display name. Duplicate headers are preserved rather than deduplicated.
+    """
+    df = pd.DataFrame([values + [1.5]], columns=["Name", "Name", "score"])
+    original = df.copy(deep=True)
+
+    escaped_csv_str = df_to_escaped_csv(df, encoding="utf8", index=False)
+
+    rows = [row.split(",") for row in escaped_csv_str.strip().split("\n")]
+    assert rows == [["Name", "Name", "score"], expected_values + ["1.5"]]
+    pd.testing.assert_frame_equal(df, original)
+
+    # Duplicate row labels and duplicate column labels at the same time.
+    df = pd.DataFrame(
+        [values, list(reversed(values))],
+        columns=["Name", "Name"],
+        index=["same", "same"],
+    )
+    original = df.copy(deep=True)
+
+    escaped_csv_str = df_to_escaped_csv(df, encoding="utf8", index=True)
+
+    rows = [row.split(",") for row in escaped_csv_str.strip().split("\n")]
+    assert rows == [
+        ["", "Name", "Name"],
+        ["same"] + expected_values,
+        ["same"] + list(reversed(expected_values)),
+    ]
+    pd.testing.assert_frame_equal(df, original)
+
+
 def test_get_chart_dataframe_returns_none_when_no_content(
     monkeypatch: pytest.MonkeyPatch,
 ):
