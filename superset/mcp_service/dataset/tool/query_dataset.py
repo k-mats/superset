@@ -418,6 +418,13 @@ async def query_dataset(  # noqa: C901
             error_type="OAuth2Error",
         )
 
+    except ValueError as exc:
+        await ctx.error("Invalid query parameters: %s" % (str(exc),))
+        return DatasetError.create(
+            error=f"Invalid query parameters: {exc}",
+            error_type="ValidationError",
+        )
+
     except (CommandException, SupersetException) as exc:
         await ctx.error("Query failed: %s" % (str(exc),))
         return DatasetError.create(

@@ -409,6 +409,46 @@ async def test_query_dataset_with_time_range(mcp_server: FastMCP) -> None:
 
 
 @pytest.mark.asyncio
+async def test_query_dataset_reversed_time_range_is_validation_error(
+    mcp_server: FastMCP,
+) -> None:
+    """A reversed explicit time range is caller input, not a server error."""
+    dataset = _make_dataset(main_dttm_col="order_date")
+    reversed_range = "2024-01-01T00:00:00 : 2020-01-01T00:00:00"
+
+    def fake_execute(
+        dataset_id: int, form_type: str, query_dict: dict[str, Any], **kwargs: Any
+    ) -> dict[str, Any]:
+        temporal = [f for f in query_dict["filters"] if f["op"] == "TEMPORAL_RANGE"]
+        get_since_until(time_range=temporal[0]["val"])
+        raise AssertionError("get_since_until should have rejected the range")
+
+    with (
+        patch.object(query_dataset_module, "resolve_dataset", return_value=dataset),
+        patch.object(
+            query_dataset_module, "execute_tabular_query", side_effect=fake_execute
+        ),
+        patch.object(query_dataset_module.logger, "exception") as mock_log_exception,
+    ):
+        async with Client(mcp_server) as client:
+            result = await client.call_tool(
+                "query_dataset",
+                {
+                    "request": {
+                        "dataset_id": 1,
+                        "metrics": ["count"],
+                        "time_range": reversed_range,
+                    }
+                },
+            )
+
+    data = json.loads(result.content[0].text)
+    assert data["error_type"] == "ValidationError"
+    assert "From date cannot be larger than to date" in data["error"]
+    mock_log_exception.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_query_dataset_time_range_no_temporal_column(mcp_server: FastMCP) -> None:
     """time_range without a temporal column returns error."""
     dataset = _make_dataset(main_dttm_col=None)
