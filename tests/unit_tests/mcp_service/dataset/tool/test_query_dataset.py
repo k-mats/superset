@@ -1269,6 +1269,52 @@ class TestQueryDatasetTemporalRangeFilterValidation:
 
 
 @pytest.mark.asyncio
+async def test_query_dataset_reversed_time_range_is_validation_error(
+    mcp_server: FastMCP,
+) -> None:
+    """An explicit '<start> : <end>' range with start after end is rejected by
+    get_since_until() with a ValueError. That is caller input, not a server
+    fault: it must surface as a ValidationError carrying the parser message,
+    without an error-level traceback being logged."""
+    dataset = _make_dataset(main_dttm_col="order_date")
+    reversed_range = "2024-01-01T00:00:00 : 2020-01-01T00:00:00"
+
+    def raise_from_parser(*args: Any, **kwargs: Any) -> None:
+        get_since_until(time_range=reversed_range)
+        raise AssertionError("get_since_until should reject a reversed range")
+
+    with (
+        patch.object(
+            query_dataset_module,
+            "resolve_dataset",
+            return_value=dataset,
+        ),
+        patch.object(
+            query_dataset_module,
+            "execute_tabular_query",
+            side_effect=raise_from_parser,
+        ),
+        patch.object(query_dataset_module.logger, "exception") as mock_log_exception,
+    ):
+        async with Client(mcp_server) as client:
+            result = await client.call_tool(
+                "query_dataset",
+                {
+                    "request": {
+                        "dataset_id": 1,
+                        "metrics": ["count"],
+                        "time_range": reversed_range,
+                    }
+                },
+            )
+
+    data = json.loads(result.content[0].text)
+    assert data["error_type"] == "ValidationError"
+    assert "From date cannot be larger than to date" in data["error"]
+    mock_log_exception.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_query_dataset_bracket_year_resolves_without_parse_error(
     mcp_server: FastMCP,
 ) -> None:
