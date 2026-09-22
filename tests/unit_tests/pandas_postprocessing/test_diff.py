@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import pytest
+from pandas import DataFrame
 
 from superset.exceptions import InvalidPostProcessingError
 from superset.utils.pandas_postprocessing import diff
@@ -49,3 +50,16 @@ def test_diff():
     post_df = diff(df=timeseries_df2, columns={"y": "y", "z": "z"}, axis=1)
     assert post_df.columns.tolist() == ["label", "y", "z"]
     assert series_to_list(post_df["z"]) == [0.0, 2.0, 8.0, 6.0]
+
+
+def test_diff_mixed_replace_and_append():
+    df = DataFrame({"sales": [10, 20, 30], "orders": [1, 2, 3]})
+    original_df = df.copy()
+
+    post_df = diff(df=df, columns={"sales": "sales", "orders": "orders_diff"})
+
+    assert post_df.columns.tolist() == ["sales", "orders", "orders_diff"]
+    assert series_to_list(post_df["sales"]) == [None, 10.0, 10.0]
+    assert post_df["orders"].tolist() == [1, 2, 3]
+    assert series_to_list(post_df["orders_diff"]) == [None, 1.0, 1.0]
+    assert df.equals(original_df)
