@@ -1313,13 +1313,13 @@ Superset support for multiple catalogs. Since, in general, a given SQLAlchemy UR
 
 Superset can connect to databases via an SSH tunnel. For databases where this doesn't make sense (eg, SQLite or BigQuery) the DB engine spec should have `disable_ssh_tunneling` set to true.
 
-### Query cancelation
+### Query cancellation
 
 Superset will try to cancel running queries if the users wants so, but it's up to the DB engine spec to handle this.
 
-Some databases have an implicit query cancelation. When a cursor stops being polled it will cancel the query. For databases that behave like this, the class method `has_implicit_cancel` (which should really be a class attribute) should return true.
+Some databases have an implicit query cancellation. When a cursor stops being polled it will cancel the query. For databases that behave like this, the class method `has_implicit_cancel` (which should really be a class attribute) should return true.
 
-For other databases, DB engine specs can implement query cancelation via the `prepare_cancel_query` and `cancel_query` methods. Implementation of query cancelation is usually heavily dependent on the database, but the DB engine specs that support it can serve as an example.
+For other databases, DB engine specs can implement query cancellation via the `prepare_cancel_query` and `cancel_query` methods. Implementation of query cancellation is usually heavily dependent on the database, but the DB engine specs that support it can serve as an example.
 
 ### Get metrics on dataset creation
 
