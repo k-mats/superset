@@ -103,24 +103,64 @@ def test_histogram_with_groupby_and_cumulative_and_normalize():
         "6.4 - 8.2",
         "8.2 - 10.0",
     ]
+    # The fixture holds 10 observations (6 in A, 4 in B). Cumulative counts are
+    # A: [2, 2, 4, 4, 6] and B: [0, 2, 2, 4, 4]; normalizing divides each by the
+    # total observation count (10), so each group ends at its share of the data
+    # (0.6 + 0.4 = 1.0) rather than dividing by the sum of the cumulative counts.
     assert result.values.tolist() == [
-        [
-            "A",
-            0.06666666666666667,
-            0.06666666666666667,
-            0.13333333333333333,
-            0.13333333333333333,
-            0.2,
-        ],
-        [
-            "B",
-            0.0,
-            0.06666666666666667,
-            0.06666666666666667,
-            0.13333333333333333,
-            0.13333333333333333,
-        ],
+        ["A", 0.2, 0.2, 0.4, 0.4, 0.6],
+        ["B", 0.0, 0.2, 0.2, 0.4, 0.4],
     ]
+
+
+def test_histogram_cumulative_normalized_no_groupby():
+    result = histogram(
+        DataFrame({"value": [1, 2, 3, 4]}),
+        "value",
+        [],
+        2,
+        cumulative=True,
+        normalize=True,
+    )
+    assert result.shape == (1, 2)
+    assert result.columns.tolist() == ["1.0 - 2.5", "2.5 - 4.0"]
+    # raw counts [2, 2] -> cumulative [2, 4] -> divided by 4 observations
+    assert result.values.tolist()[0] == pytest.approx([0.5, 1.0])
+
+    result = histogram(
+        DataFrame({"value": [1, 2, 3, 4, 5, 6]}),
+        "value",
+        [],
+        3,
+        cumulative=True,
+        normalize=True,
+    )
+    assert result.shape == (1, 3)
+    # raw counts [2, 2, 2] -> cumulative [2, 4, 6] -> divided by 6 observations
+    assert result.values.tolist()[0] == pytest.approx([1 / 3, 2 / 3, 1.0])
+    assert result.values[0, -1] == pytest.approx(1.0)
+
+
+def test_histogram_cumulative_normalized_groupby():
+    unequal_groups = DataFrame(
+        {
+            "group": ["X"] * 7 + ["Y"] * 3,
+            "value": [1, 2, 3, 4, 5, 6, 7, 2, 4, 6],
+        }
+    )
+    result = histogram(
+        unequal_groups, "value", ["group"], 2, cumulative=True, normalize=True
+    )
+    assert result.shape == (2, 3)
+    assert result.columns.tolist() == ["group", "1.0 - 4.0", "4.0 - 7.0"]
+    assert result["group"].tolist() == ["X", "Y"]
+    # 10 observations in total. Bin edges are [1, 4, 7], so
+    # X: raw [3, 4] -> cumulative [3, 7]; Y: raw [1, 2] -> cumulative [1, 3].
+    # Dividing by 10 gives each group's share of all observations.
+    values = result.drop(columns="group").values
+    assert values[0].tolist() == pytest.approx([0.3, 0.7])
+    assert values[1].tolist() == pytest.approx([0.1, 0.3])
+    assert values[:, -1].sum() == pytest.approx(1.0)
 
 
 def test_histogram_with_non_numeric_column():
