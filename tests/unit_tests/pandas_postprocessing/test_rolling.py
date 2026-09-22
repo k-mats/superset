@@ -237,3 +237,22 @@ def test_rolling_after_pivot_with_multiple_metrics():
             }
         )
     )
+
+
+def test_rolling_mixed_replace_and_append():
+    df = pd.DataFrame({"sales": [10, 20, 30], "orders": [1, 2, 3]})
+    original_df = df.copy()
+
+    post_df = pp.rolling(
+        df=df,
+        columns={"sales": "sales", "orders": "orders_rolling"},
+        rolling_type="sum",
+        window=2,
+        min_periods=1,
+    )
+
+    assert post_df.columns.tolist() == ["sales", "orders", "orders_rolling"]
+    assert post_df["sales"].tolist() == [10.0, 30.0, 50.0]
+    assert post_df["orders"].tolist() == [1, 2, 3]
+    assert post_df["orders_rolling"].tolist() == [1.0, 3.0, 5.0]
+    assert df.equals(original_df)

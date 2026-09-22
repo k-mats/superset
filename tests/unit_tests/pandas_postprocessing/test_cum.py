@@ -176,3 +176,32 @@ def test_cum_after_pivot_with_multiple_metrics():
             }
         )
     )
+
+
+def test_cum_mixed_replace_and_append():
+    df = pd.DataFrame({"sales": [10, 20, 30], "orders": [1, 2, 3]})
+    original_df = df.copy()
+
+    post_df = pp.cum(
+        df=df,
+        operator="sum",
+        columns={"sales": "sales", "orders": "orders_cum"},
+    )
+
+    assert post_df.columns.tolist() == ["sales", "orders", "orders_cum"]
+    assert post_df["sales"].tolist() == [10, 30, 60]
+    assert post_df["orders"].tolist() == [1, 2, 3]
+    assert post_df["orders_cum"].tolist() == [1, 3, 6]
+    assert df.equals(original_df)
+
+
+def test_cum_rename_onto_existing_column():
+    df = pd.DataFrame({"sales": [10, 20, 30], "orders": [1, 2, 3]})
+    original_df = df.copy()
+
+    post_df = pp.cum(df=df, operator="sum", columns={"sales": "orders"})
+
+    assert post_df.columns.tolist() == ["sales", "orders"]
+    assert post_df["sales"].tolist() == [10, 20, 30]
+    assert post_df["orders"].tolist() == [10, 30, 60]
+    assert df.equals(original_df)
