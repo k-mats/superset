@@ -92,18 +92,21 @@ def df_to_escaped_csv(df: pd.DataFrame, **kwargs: Any) -> Any:
     # Escape csv headers
     df = df.rename(columns=escape_values)
 
-    # Escape csv values. Iterate by index label (via ``items``) rather than by
-    # positional offset so the escaped value is written back to the correct row
-    # even when the DataFrame has a non-default index (e.g. the flattened
-    # MultiIndex produced by pivot_table_v2 post-processing). Pairing positional
-    # indices with the label-based ``.at`` accessor would otherwise create
-    # phantom rows and corrupt the output. Only string cells are reassigned, so
-    # the dtype of mixed object columns (e.g. nullable integers) is preserved.
-    for name, column in df.items():
+    # Escape csv values. Columns are addressed strictly by position: row and
+    # column labels are not guaranteed to be unique (e.g. a ``verbose_map`` can
+    # give distinct source columns the same display name, and pivoted frames
+    # may repeat index labels), so label-based writes like ``.at`` could touch
+    # several cells at once. Only string cells are transformed and the column
+    # dtype is kept, so mixed object columns (e.g. nullable integers) are
+    # preserved.
+    for position in range(df.shape[1]):
+        column = df.iloc[:, position]
         if pd.api.types.is_string_dtype(column.dtype):
-            for label, value in column.items():
+            values = column.to_numpy(dtype=object, copy=True)
+            for offset, value in enumerate(values):
                 if isinstance(value, str):
-                    df.at[label, name] = escape_value(value)
+                    values[offset] = escape_value(value)
+            df.isetitem(position, pd.Series(values, index=df.index, dtype=column.dtype))
 
     return df.to_csv(escapechar="\\", **kwargs)
 
